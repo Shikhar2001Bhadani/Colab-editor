@@ -44,11 +44,14 @@ const EditorPage = () => {
     socket.emit('join-document', { documentId, user: userInfo });
 
     socket.on('active-users', (users) => {
-      setActiveUsers(users);
+      setActiveUsers(Array.isArray(users) ? users : []);
     });
     
     socket.on('user-joined', (user) => {
-        setActiveUsers((prevUsers) => [...prevUsers.filter(u => u.id !== user.id), user]);
+        setActiveUsers((prevUsers) => {
+            if (!Array.isArray(prevUsers)) prevUsers = [];
+            return [...prevUsers.filter(u => u.id !== user.id), user];
+        });
     });
 
     socket.on('user-left', (userId) => {
@@ -76,7 +79,7 @@ const EditorPage = () => {
         <Flex justifyContent="space-between" alignItems="center" mb={4}>
             <Text fontSize="2xl" fontWeight="bold">{document?.title}</Text>
             <Flex>
-                {activeUsers.map(user => (
+                {Array.isArray(activeUsers) && activeUsers.map(user => (
                     <Tooltip key={user.id} label={user.username} aria-label='A tooltip'>
                         <Avatar name={user.username} size="sm" ml="-2" />
                     </Tooltip>
