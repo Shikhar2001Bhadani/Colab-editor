@@ -5,6 +5,7 @@ import { Box, Spinner, Text, Flex, Avatar, Tooltip } from '@chakra-ui/react';
 import Editor from '../components/Editor';
 import AIAssistant from '../components/AIAssistant';
 import useAuth from '../hooks/useAuth';
+import useActiveUsers from '../hooks/useActiveUsers';
 import { getDocumentById } from '../api/documentApi';
 
 const EditorPage = () => {
@@ -14,7 +15,6 @@ const EditorPage = () => {
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeUsers, setActiveUsers] = useState([]);
   const quillRef = useRef();
 
   useEffect(() => {
@@ -38,28 +38,18 @@ const EditorPage = () => {
     };
   }, [documentId]);
 
+  const activeUsers = useActiveUsers(socket, documentId, userInfo);
+
   useEffect(() => {
     if (!socket || !userInfo || !document) return;
-
+    
     socket.emit('join-document', { documentId, user: userInfo });
 
-    socket.on('active-users', (users) => {
-      setActiveUsers(Array.isArray(users) ? users : []);
-    });
-    
-    socket.on('user-joined', (user) => {
-        setActiveUsers((prevUsers) => {
-            if (!Array.isArray(prevUsers)) prevUsers = [];
-            return [...prevUsers.filter(u => u.id !== user.id), user];
-        });
-    });
-
     socket.on('user-left', (userId) => {
-        setActiveUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-        if (quillRef.current) {
-            const cursors = quillRef.current.getEditor().getModule('cursors');
-            cursors.removeCursor(userId);
-        }
+      if (quillRef.current) {
+        const cursors = quillRef.current.getEditor().getModule('cursors');
+        cursors.removeCursor(userId);
+      }
     });
 
     return () => {
@@ -79,11 +69,11 @@ const EditorPage = () => {
         <Flex justifyContent="space-between" alignItems="center" mb={4}>
             <Text fontSize="2xl" fontWeight="bold">{document?.title}</Text>
             <Flex>
-                {Array.isArray(activeUsers) && activeUsers.map(user => (
+                {activeUsers?.filter(Boolean).map(user => user?.id && user?.username ? (
                     <Tooltip key={user.id} label={user.username} aria-label='A tooltip'>
                         <Avatar name={user.username} size="sm" ml="-2" />
                     </Tooltip>
-                ))}
+                ) : null)}
             </Flex>
         </Flex>
         <Editor socket={socket} documentId={documentId} initialContent={document.content} quillRef={quillRef} />
