@@ -65,28 +65,17 @@ const autoCompleteText = asyncHandler(async (req, res) => {
       });
     }
 
-    // Build a more focused prompt for completion
-    const prompt = `Complete this partial text naturally, maintaining the same style and context.
-    
-    Previous text: "${cleanPrefix}"
-    Broader context: "${cleanContext}"
-    Partial word/text to complete: "${cleanWord}"
+    // Build a simple prompt for completion
+    const prompt = `Look into this incomplete text and complete it into a meaningful one. Keep the current word and add to it.
+
+    Current text: "${fullParagraph}"
     
     Rules:
-    1. Consider the previous text as the start of the sentence/phrase
-    2. The partial word/text "${cleanWord}" is what the user is currently typing
-    3. Complete it to form a natural continuation of the previous text
-    4. Maintain the same tone and style as the context
-    5. If it's a question, complete as a question
-    6. If it's a statement, complete as a statement
-    7. The completion should merge smoothly with the partial word
-    8. DO NOT repeat the partial word in your completion
+    1. Keep the existing words exactly as they are
+    2. Add words to complete the sentence naturally
+    3. Make it grammatically correct
     
-    Example:
-    If previous text is "Where do you" and partial word is "li", complete with "ve" or "ve now?" etc.
-    
-    Provide ONLY the completion that would naturally follow the partial text, nothing else.
-    Do not include the partial text in your response.`;
+    Return ONLY the completed sentence, no explanations.`;
     
     console.log('Sending focused prompt to Gemini:', prompt);
     
@@ -99,10 +88,11 @@ const autoCompleteText = asyncHandler(async (req, res) => {
     const completion = result.trim();
     console.log('Received completion:', completion);
     
-    res.json({ 
+    // Return a consistent response format
+    res.status(200).json({ 
       success: true,
-      original: cleanText,
-      completion: completion
+      completion: completion,
+      originalText: cleanWord // Include the original text for reference
     });
     
   } catch (error) {

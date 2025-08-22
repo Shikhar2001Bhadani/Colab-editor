@@ -17,7 +17,7 @@ export const summarizeText = async (text) => {
   return data;
 };
 
-export const autoCompleteText = async (text) => {
-  const { data } = await axios.post(`${API_URL}/autocomplete`, { text });
+export const autoCompleteText = async (params) => {
+  const { data } = await axios.post(`${API_URL}/autocomplete`, params);
   return data;
 };

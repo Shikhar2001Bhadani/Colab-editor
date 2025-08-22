@@ -84,48 +84,38 @@ const AIAssistant = ({ quillRef, documentId }) => {
       // Debounce the request
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      const response = await fetch('/api/ai/autocomplete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          text: currentWord,
-          prefix: textBeforeWord,
-          context: context,
-          fullParagraph: currentLine,
-          cursorPosition: cursorPos
-        })
+      const response = await apiAutoComplete({ 
+        text: currentWord,
+        prefix: textBeforeWord,
+        context: context,
+        fullParagraph: currentLine,
+        cursorPosition: cursorPos
       });
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to get completion');
+      if (!response || !response.success) {
+        throw new Error('Failed to get completion');
       }
       
-      if (data.success && data.completion) {
-        // Calculate how much to delete (just the current word)
-        const deleteLength = currentWord.length;
+      if (response.success && response.completion) {
+        // Do not delete the current word, just add the completion
+        const completion = response.completion.trim();
         
-        // Remove the partial sentence
-        quill.deleteText(cursorPos - deleteLength, deleteLength, 'user');
-        
-        // Insert the completion
-        const completion = data.completion.trim();
-        
-        // Ensure proper spacing and punctuation
+        // Ensure proper spacing
         let completionText = completion;
-        if (!completion.match(/^[.,!?;:)]/) && !completion.startsWith(' ')) {
-          completionText = ' ' + completionText;
+        if (!completion.startsWith(' ')) {
+          completionText = '' + completionText;
         }
-        if (!completion.match(/[.!?]$/)) {
+        
+        // Only add period if it's missing and doesn't have other punctuation
+        if (!completion.match(/[.!?]$/) && !completion.match(/[.,;:]$/)) {
           completionText += '.';
         }
         
-        quill.insertText(cursorPos - deleteLength, completionText, 'user');
+        // Insert at the current cursor position
+        quill.insertText(cursorPos, completionText, 'user');
         
         // Move cursor to the end of the inserted text
-        const newPos = cursorPos - deleteLength + completionText.length;
+        const newPos = cursorPos + completionText.length;
         quill.setSelection(newPos, 0, 'user');
       }
     } catch (error) {
@@ -133,16 +123,23 @@ const AIAssistant = ({ quillRef, documentId }) => {
       
       // More user-friendly error messages
       let errorMessage = 'Please try again';
-      if (error.message.includes('Rate limit') || error.message.includes('busy')) {
+      let errorStatus = 'warning';
+      
+      if (error.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+        errorStatus = 'error';
+      } else if (error.message.includes('Rate limit') || error.message.includes('busy')) {
         errorMessage = 'Too many requests. Please wait a few seconds and try again.';
       } else if (error.message.includes('timed out')) {
         errorMessage = 'Request took too long. Please try again.';
+      } else if (error.message.includes('Failed to get completion')) {
+        errorMessage = 'Could not generate completion. Please try again.';
       }
       
       toast({ 
         title: 'Auto-complete paused', 
         description: errorMessage,
-        status: 'warning',
+        status: errorStatus,
         duration: 3000,
         isClosable: true
       });

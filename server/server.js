@@ -28,11 +28,26 @@ const io = new Server(server, {
   },
   // Add a ping timeout to keep connections alive
   pingTimeout: 60000,
+  transports: ['websocket', 'polling'],
+  // Add reconnection settings
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
 });
 
 // Security Middleware
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CLIENT_URL 
+    : ['http://localhost:5173', 'http://localhost:4173', process.env.CLIENT_URL],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
 
 // Rate Limiting
 const limiter = rateLimit({
