@@ -6,11 +6,10 @@ const generateToken = (res, userId) => {
 
   res.cookie('jwt', token, {
     httpOnly: true,
-    secure: true, // Always use secure in production
-    sameSite: 'none', // Required for cross-origin
+    secure: true,
+    sameSite: 'none',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     path: '/',
-    domain: config.nodeEnv === 'production' ? '.onrender.com' : undefined,
   });
 };
 
