@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { Box, Spinner, Text, Flex, Avatar, Tooltip } from '@chakra-ui/react';
+import { Box, Spinner, Text, Flex, Avatar, Tooltip, VStack } from '@chakra-ui/react';
 import Editor from '../components/Editor';
 import AIAssistant from '../components/AIAssistant';
 import useAuth from '../hooks/useAuth';
-import useActiveUsers from '../hooks/useActiveUsers';
 import { getDocumentById } from '../api/documentApi';
 
 const EditorPage = () => {
@@ -15,6 +14,8 @@ const EditorPage = () => {
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeUsers, setActiveUsers] = useState(new Set());
+  const [userDetails, setUserDetails] = useState({});
   const quillRef = useRef();
 
   useEffect(() => {
@@ -38,43 +39,97 @@ const EditorPage = () => {
     };
   }, [documentId]);
 
-  const activeUsers = useActiveUsers(socket, documentId, userInfo);
-
   useEffect(() => {
     if (!socket || !userInfo || !document) return;
     
-    socket.emit('join-document', { documentId, user: userInfo });
+    const handleActiveUsers = (users) => {
+      try {
+        const parsedUsers = typeof users === 'string' ? JSON.parse(users) : users;
+        if (!Array.isArray(parsedUsers)) return;
+        
+        const newUserDetails = {};
+        const newActiveUsers = new Set();
+        
+        parsedUsers.forEach(user => {
+          if (user && user.id && user.username) {
+            newUserDetails[user.id] = user;
+            newActiveUsers.add(user.id);
+          }
+        });
+        
+        setUserDetails(newUserDetails);
+        setActiveUsers(newActiveUsers);
+      } catch (error) {
+        console.warn('Failed to parse active users:', error);
+      }
+    };
 
-    socket.on('user-left', (userId) => {
+    const handleUserJoined = (userData) => {
+      try {
+        const user = typeof userData === 'string' ? JSON.parse(userData) : userData;
+        if (!user || !user.id || !user.username) return;
+
+        setUserDetails(prev => ({...prev, [user.id]: user}));
+        setActiveUsers(prev => new Set([...prev, user.id]));
+      } catch (error) {
+        console.warn('Failed to handle user joined:', error);
+      }
+    };
+
+    const handleUserLeft = (userId) => {
+      if (!userId) return;
+      setActiveUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+      
       if (quillRef.current) {
         const cursors = quillRef.current.getEditor().getModule('cursors');
         cursors.removeCursor(userId);
       }
-    });
+    };
+
+    socket.emit('join-document', { documentId, user: userInfo });
+    
+    socket.on('active-users', handleActiveUsers);
+    socket.on('user-joined', handleUserJoined);
+    socket.on('user-left', handleUserLeft);
 
     return () => {
       socket.emit('leave-document', { documentId, user: userInfo });
-      socket.off('active-users');
-      socket.off('user-joined');
-      socket.off('user-left');
+      socket.off('active-users', handleActiveUsers);
+      socket.off('user-joined', handleUserJoined);
+      socket.off('user-left', handleUserLeft);
     };
   }, [socket, userInfo, documentId, document]);
 
   if (loading) return <Spinner />;
   if (error) return <Text color="red.500">{error}</Text>;
 
+  const renderActiveUsers = () => {
+    const elements = [];
+    activeUsers.forEach(userId => {
+      const user = userDetails[userId];
+      if (user && user.username) {
+        elements.push(
+          <Tooltip key={userId} label={user.username} aria-label='A tooltip'>
+            <Avatar name={user.username} size="sm" ml="-2" />
+          </Tooltip>
+        );
+      }
+    });
+    return elements;
+  };
+
   return (
     <Flex height="calc(100vh - 64px)">
       <Box flex="1" p={4} overflowY="auto">
         <Flex justifyContent="space-between" alignItems="center" mb={4}>
-            <Text fontSize="2xl" fontWeight="bold">{document?.title}</Text>
-            <Flex>
-                {activeUsers?.filter(Boolean).map(user => user?.id && user?.username ? (
-                    <Tooltip key={user.id} label={user.username} aria-label='A tooltip'>
-                        <Avatar name={user.username} size="sm" ml="-2" />
-                    </Tooltip>
-                ) : null)}
-            </Flex>
+          <Text fontSize="2xl" fontWeight="bold">{document?.title}</Text>
+          <Flex>
+            {renderActiveUsers()}
+          </Flex>
         </Flex>
         <Editor socket={socket} documentId={documentId} initialContent={document.content} quillRef={quillRef} />
       </Box>

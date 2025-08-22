@@ -10,21 +10,40 @@ const socketHandlers = (socket, io) => {
 
   // Join a document room
   socket.on('join-document', async ({ documentId, user }) => {
+    if (!documentId || !user || !user._id || !user.username) {
+      console.warn('Invalid join-document data:', { documentId, user });
+      return;
+    }
+
     socket.join(documentId);
     console.log(`User ${user.username} (${socket.id}) joined document ${documentId}`);
 
     if (!activeUsers[documentId]) {
       activeUsers[documentId] = [];
     }
-    // Add user if not already in the list
-    if (!activeUsers[documentId].find(u => u.id === user._id)) {
-        activeUsers[documentId].push({ id: user._id, username: user.username });
-    }
+
+    const safeUser = {
+      id: user._id.toString(),
+      username: user.username,
+      socketId: socket.id
+    };
+
+    // Remove any existing instances of this user
+    activeUsers[documentId] = activeUsers[documentId].filter(u => u.id !== safeUser.id);
+    
+    // Add the user to active users
+    activeUsers[documentId].push(safeUser);
+
+    // Ensure we're sending an array
+    const usersToSend = Array.isArray(activeUsers[documentId]) 
+      ? activeUsers[documentId]
+      : [];
 
     // Send current list of active users to the new user
-    socket.emit('active-users', activeUsers[documentId]);
-    // Notify others in the room about the new user
-    socket.to(documentId).emit('user-joined', { id: user._id, username: user.username });
+    socket.emit('active-users', JSON.stringify(usersToSend));
+    
+    // Notify others about the new user
+    socket.to(documentId).emit('user-joined', JSON.stringify(safeUser));
 
     const document = await Document.findById(documentId);
     if (document) {

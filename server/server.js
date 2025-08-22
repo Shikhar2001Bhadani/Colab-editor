@@ -22,17 +22,23 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://colab-editor-frontend.vercel.app', 'https://collab-editor-rl5n.onrender.com']
+      : process.env.CLIENT_URL || true,
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  // Add a ping timeout to keep connections alive
   pingTimeout: 60000,
   transports: ['websocket', 'polling'],
-  // Add reconnection settings
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
+  maxHttpBufferSize: 1e8,
+  serveClient: false,
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: true,
+  }
 });
 
 // Security Middleware
